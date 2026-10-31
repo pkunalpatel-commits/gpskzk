@@ -15,9 +15,15 @@ It is designed around the agreed workflow:
 
 ## Important status / data truth
 
-This repository contains working application structure and a functional local analytics backend. It is **not yet a certified, production-ready Dhan integration**. Dhan authentication, entitlement, instrument-master format, WebSocket packet versions, subscription limits and API access must be verified against the current official DhanHQ documentation and your account. Never invent market data or treat demo fixtures as live data.
+DhanHQ **Data API** integration is implemented for option-chain + expiry list (official v2 endpoints / `dhanhq` SDK).
 
-The backend deliberately has a provider adapter boundary. Until valid Dhan credentials and a verified adapter are configured, the app must show `DEMO / NOT CONNECTED`, not live labels. Do not commit credentials to GitHub or embed them in the APK.
+- Credentials stay **only** on the backend (`DHAN_CLIENT_ID`, `DHAN_ACCESS_TOKEN`, `DATA_MODE=live`).
+- Android never embeds tokens; it calls your backend.
+- Live mode requires an active Dhan **Data API** subscription and a valid access token.
+- Option-chain rate limit: **1 unique request / 3 seconds** (Dhan rule).
+- WebSocket live tick feed is not yet wired; REST option-chain ingest is ready.
+
+See `docs/DHAN_INTEGRATION.md` for setup steps. Do not commit credentials or put them in the APK.
 
 ## Repository structure
 

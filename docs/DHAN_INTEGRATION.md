@@ -1,20 +1,87 @@
-# DhanHQ integration checklist
+# DhanHQ Data API integration
 
-This project intentionally isolates Dhan-specific calls in `backend/app/providers/dhan.py`.
+Implemented against official DhanHQ v2 documentation:
+- https://docs.dhanhq.co/
+- https://dhanhq.co/docs/v2/option-chain/
+- Python SDK: `pip install dhanhq`
 
-Before enabling live mode:
+## What is wired
 
-1. Read current official DhanHQ API documentation and confirm the correct API version.
-2. Confirm the account has the required market-data entitlement.
-3. Configure `DHAN_CLIENT_ID` and `DHAN_ACCESS_TOKEN` in the backend environment only.
-4. Implement the currently documented authentication mechanism.
-5. Download and parse the official instrument master; persist exchange segment, security ID, underlying, expiry, strike, option type and lot size.
-6. Implement the currently documented option-chain endpoint and respect its current per-client/per-endpoint rate limits.
-7. Implement WebSocket connection, authorization, subscription packet, binary packet decoding, heartbeat and reconnect according to the current packet specification.
-8. Confirm whether live feed provides the trade prints and bid/ask fields needed for a real footprint. If aggressor-side trade classification is not supplied, label inferred classification as estimated.
-9. Validate OI values, units and update frequency against the official option-chain response.
-10. Add contract-level subscription limits and batching.
+| Feature | Endpoint / module | Status |
+|---------|-------------------|--------|
+| Auth (client-id + access-token) | env only | ✅ |
+| Provider status | `GET /api/v1/provider/status` | ✅ |
+| Expiry list | `GET /api/v1/dhan/expiries` | ✅ |
+| Option chain (OI, LTP, IV, bid/ask) | `GET /api/v1/dhan/optionchain` | ✅ |
+| Ingest into OI premium engine | `ingest=true` on optionchain | ✅ |
+| Credentials in APK | — | ❌ never |
 
-Never put the Dhan access token in Android resources, BuildConfig, source control, logs or API responses. Use HTTPS and an authenticated backend in production.
+## Setup (backend only)
 
-The adapter currently reports `configured=false` and does not fabricate live data. A developer must complete and test the version-sensitive Dhan packet/auth implementation before setting live status.
+1. Open **web.dhan.co** → Profile → **Access DhanHQ APIs**
+2. Generate **Access Token** (24h) or use API-key flow + TOTP
+3. Confirm **Data APIs** subscription is active (required for option chain / live quotes)
+4. In `backend/.env`:
+
+```env
+DATA_MODE=live
+DHAN_CLIENT_ID=your_client_id
+DHAN_ACCESS_TOKEN=your_access_token
+```
+
+5. Install and run:
+
+```bash
+cd backend
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+6. Test:
+
+```bash
+curl http://localhost:8000/api/v1/provider/status
+curl "http://localhost:8000/api/v1/dhan/expiries?underlying=NIFTY"
+curl "http://localhost:8000/api/v1/dhan/optionchain?underlying=NIFTY&atm_range=10&ingest=true"
+```
+
+## Official identifiers
+
+| Underlying | Security ID | Segment |
+|------------|-------------|---------|
+| NIFTY      | 13          | IDX_I   |
+| BANKNIFTY  | 25          | IDX_I   |
+| FINNIFTY   | 27          | IDX_I   |
+
+## Rate limits (Dhan)
+
+- Option Chain: **1 unique request / 3 seconds**
+- Market Quote: 1 req/sec (up to 1000 instruments)
+- Data APIs daily cap: see current Dhan docs
+
+Respect these limits; do not poll option chain faster than every 3s.
+
+## Security rules (must follow)
+
+- Credentials live **only** in backend environment variables
+- Never put `DHAN_ACCESS_TOKEN` in Android `BuildConfig`, resources, or source
+- Android talks only to **your backend** over HTTP/HTTPS
+- Do not log full tokens
+- Access tokens expire (typically 24h); renew via Dhan Web or RenewToken API
+
+## Android
+
+The app shows provider status from `/api/v1/provider/status`.
+When `mode=live` and `connected=true`, the UI labels data as live.
+When credentials are missing, it clearly shows **DEMO / NOT CONNECTED**.
+
+## Not yet implemented (next steps)
+
+- Live Market Feed WebSocket (`wss://api-feed.dhan.co`) for tick-level OI/LTP
+- Binary packet decode for Full / Quote / OI packets
+- Background poller (every ≥3s) during market hours
+- Instrument master CSV download + security_id cache
+- Token auto-renewal with TOTP
+
+These require continuous connection handling and must still keep all secrets on the server.
