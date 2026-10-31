@@ -1,0 +1,12 @@
+.gradle/
+.idea/
+local.properties
+**/build/
+**/.DS_Store
+backend/.venv/
+backend/__pycache__/
+backend/.pytest_cache/
+backend/data/*.db
+.env
+*.jks
+*.keystore
